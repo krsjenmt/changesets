@@ -7,7 +7,6 @@ import { info, warn } from "@changesets/logger";
 import { PreState } from "@changesets/types";
 import * as npmUtils from "./npm-utils";
 import { TwoFactorState } from "../../utils/types";
-import { probeOtpRequirement } from "./registry-client";
 
 type PublishedState = "never" | "published" | "only-pre";
 
@@ -50,7 +49,6 @@ const getTwoFactorState = async ({
     return {
       token: otp,
       isRequired: Promise.resolve(true),
-      mode: "classic",
     };
   }
 
@@ -59,38 +57,16 @@ const getTwoFactorState = async ({
       isCustomRegistry(npmUtils.getCorrectRegistry(pkg.packageJson).registry)
     ) || isCustomRegistry(process.env.npm_config_registry);
 
-  if (!process.stdin.isTTY || hasCustomRegistry) {
+  if (!process.stdin.isTTY || !process.stdout.isTTY || hasCustomRegistry) {
     return {
       token: null,
       isRequired: Promise.resolve(false),
-      mode: "none",
-    };
-  }
-
-  const { registry } = npmUtils.getCorrectRegistry();
-  const probeResult = await probeOtpRequirement(registry);
-
-  if (probeResult.type === "web") {
-    return {
-      token: null,
-      isRequired: Promise.resolve(true),
-      mode: "web",
-      webAuthUrls: probeResult.webAuthUrls,
-    };
-  }
-
-  if (probeResult.type === "classic") {
-    return {
-      token: null,
-      isRequired: Promise.resolve(true),
-      mode: "classic",
     };
   }
 
   return {
     token: null,
     isRequired: npmUtils.getTokenIsRequired(),
-    mode: "classic",
   };
 };
 

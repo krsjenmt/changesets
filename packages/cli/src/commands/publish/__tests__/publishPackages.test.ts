@@ -26,6 +26,11 @@ describe("publishPackages", () => {
       });
 
       // @ts-ignore
+      npmUtils.getCorrectRegistry.mockImplementation(() => ({
+        registry: "https://registry.npmjs.org",
+      }));
+
+      // @ts-ignore
       npmUtils.infoAllow404.mockImplementation(() => ({
         published: false,
         pkgInfo: {
