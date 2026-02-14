@@ -67,7 +67,7 @@ const getTwoFactorState = async ({
     };
   }
 
-  const registry = npmUtils.getCorrectRegistry().registry;
+  const { registry } = npmUtils.getCorrectRegistry();
   const probeResult = await probeOtpRequirement(registry);
 
   if (probeResult.type === "web") {
