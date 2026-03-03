@@ -1,13 +1,14 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { read } from "@changesets/config";
 import * as git from "@changesets/git";
-import { gitdir, silenceLogsInBlock } from "@changesets/test-utils";
-import { ReleasePlan } from "@changesets/types";
+import { gitdir, outputFile, silenceLogsInBlock } from "@changesets/test-utils";
+import type { ReleasePlan } from "@changesets/types";
 import writeChangeset from "@changesets/write";
 import { getPackages } from "@manypkg/get-packages";
-import fs from "fs-extra";
+import fs from "node:fs/promises";
 import path from "path";
 import spawn from "spawndamnit";
-import status from "..";
+import status from "../index.ts";
 
 async function readConfig(cwd: string) {
   return read(cwd, await getPackages(cwd));
@@ -44,7 +45,7 @@ describe("status", () => {
   silenceLogsInBlock();
 
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it("should get the status for a simple changeset and return the release object", async () => {
@@ -62,7 +63,7 @@ describe("status", () => {
 
     await spawn("git", ["checkout", "-b", "new-branch"], { cwd });
 
-    await fs.outputFile(
+    await outputFile(
       path.join(cwd, "packages/pkg-a/a.js"),
       'export default "updated a"'
     );
@@ -128,7 +129,7 @@ describe("status", () => {
 
     await spawn("git", ["checkout", "-b", "new-branch"], { cwd });
 
-    await fs.outputFile(
+    await outputFile(
       path.join(cwd, "packages/pkg-a/a.js"),
       'export default "updated a"'
     );
@@ -190,12 +191,11 @@ describe("status", () => {
       ".changeset/config.json": JSON.stringify({}),
     });
 
-    // @ts-ignore
-    jest.spyOn(process, "exit").mockImplementation(() => {});
+    vi.spyOn(process, "exit").mockImplementation((() => {}) as never);
 
     await spawn("git", ["checkout", "-b", "new-branch"], { cwd });
 
-    await fs.outputFile(
+    await outputFile(
       path.join(cwd, "packages/pkg-a/a.js"),
       'export default "updated a"'
     );
@@ -221,8 +221,7 @@ describe("status", () => {
       ".changeset/config.json": JSON.stringify({}),
     });
 
-    // @ts-ignore
-    jest.spyOn(process, "exit").mockImplementation(() => {});
+    vi.spyOn(process, "exit").mockImplementation((() => {}) as never);
 
     await spawn("git", ["checkout", "-b", "new-branch"], { cwd });
 
@@ -253,12 +252,11 @@ describe("status", () => {
       ".changeset/config.json": JSON.stringify({}),
     });
 
-    // @ts-ignore
-    jest.spyOn(process, "exit").mockImplementation(() => {});
+    vi.spyOn(process, "exit").mockImplementation((() => {}) as never);
 
     await spawn("git", ["checkout", "-b", "new-branch"], { cwd });
 
-    await fs.outputFile(
+    await outputFile(
       path.join(cwd, "packages/pkg-a/a.js"),
       'export default "updated a"'
     );
@@ -295,7 +293,7 @@ describe("status", () => {
 
     await spawn("git", ["checkout", "-b", "new-branch"], { cwd });
 
-    await fs.outputFile(
+    await outputFile(
       path.join(cwd, "packages/pkg-a/a.js"),
       'export default "updated a"'
     );
@@ -319,7 +317,7 @@ describe("status", () => {
       await readConfig(cwd)
     );
 
-    const releaseObj = await fs.readFile(path.join(cwd, output), "utf-8");
+    const releaseObj = await fs.readFile(path.join(cwd, output), "utf8");
 
     expect(probsUndefined).toEqual(undefined);
     expect(replaceHumanIds(JSON.parse(releaseObj))).toMatchInlineSnapshot(`
@@ -366,12 +364,11 @@ describe("status", () => {
       }),
     });
 
-    // @ts-ignore
-    jest.spyOn(process, "exit").mockImplementation(() => {});
+    vi.spyOn(process, "exit").mockImplementation((() => {}) as never);
 
     await spawn("git", ["checkout", "-b", "new-branch"], { cwd });
 
-    await fs.outputFile(
+    await outputFile(
       path.join(cwd, "packages/pkg-a/unrelated.json"),
       JSON.stringify({})
     );
@@ -409,12 +406,11 @@ describe("status", () => {
       }),
     });
 
-    // @ts-ignore
-    jest.spyOn(process, "exit").mockImplementation(() => {});
+    vi.spyOn(process, "exit").mockImplementation((() => {}) as never);
 
     await spawn("git", ["checkout", "-b", "new-branch"], { cwd });
 
-    await fs.outputFile(
+    await outputFile(
       path.join(cwd, "packages/pkg-a/src/a.js"),
       'export default "updated a"'
     );
@@ -445,7 +441,7 @@ describe("status", () => {
 
     await spawn("git", ["checkout", "-b", "new-branch"], { cwd });
 
-    await fs.outputFile(
+    await outputFile(
       path.join(cwd, "packages/pkg-a/a.js"),
       'export default "updated a"'
     );
@@ -515,12 +511,11 @@ describe("status", () => {
       }),
     });
 
-    // @ts-ignore
-    jest.spyOn(process, "exit").mockImplementation(() => {});
+    vi.spyOn(process, "exit").mockImplementation((() => {}) as never);
 
     await spawn("git", ["checkout", "-b", "new-branch"], { cwd });
 
-    await fs.outputFile(
+    await outputFile(
       path.join(cwd, "packages/pkg-b/b.js"),
       'export default "updated b"'
     );
@@ -565,12 +560,11 @@ describe("status", () => {
       }),
     });
 
-    // @ts-ignore
-    jest.spyOn(process, "exit").mockImplementation(() => {});
+    vi.spyOn(process, "exit").mockImplementation((() => {}) as never);
 
     await spawn("git", ["checkout", "-b", "new-branch"], { cwd });
 
-    await fs.outputFile(
+    await outputFile(
       path.join(cwd, "packages/pkg-b/b.js"),
       'export default "updated b"'
     );

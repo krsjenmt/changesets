@@ -1,9 +1,8 @@
 import spawn from "spawndamnit";
-import fs from "fs";
+import fs from "node:fs/promises";
 import path from "path";
-import { getPackages, Package } from "@manypkg/get-packages";
+import { getPackages, type Package } from "@manypkg/get-packages";
 import { GitError } from "@changesets/errors";
-import isSubdir from "is-subdir";
 import micromatch from "micromatch";
 
 export async function add(pathToFile: string, cwd: string) {
@@ -159,7 +158,12 @@ export async function isRepoShallow({ cwd }: { cwd: string }) {
     const fullGitDir = path.resolve(cwd, gitDir);
 
     // Check for the existence of <gitDir>/shallow
-    return fs.existsSync(path.join(fullGitDir, "shallow"));
+    try {
+      await fs.access(path.join(fullGitDir, "shallow"));
+      return true;
+    } catch {
+      return false;
+    }
   } else {
     // We have a newer Git which supports `rev-parse --is-shallow-repository`. We'll use
     // the output of that instead of messing with .git/shallow in case that changes in the future.
@@ -270,8 +274,8 @@ export async function getChangedPackagesSinceRef({
 
         for (let i = changedFiles.length - 1; i >= 0; i--) {
           const file = changedFiles[i];
-
-          if (isSubdir(pkg.dir, file)) {
+          const isFileInPkg = !path.relative(pkg.dir, file).startsWith("..");
+          if (isFileInPkg) {
             changedFiles.splice(i, 1);
             const relativeFile = file.slice(pkg.dir.length + 1);
             changedPackageFiles.push(relativeFile);

@@ -1,23 +1,24 @@
 import path from "path";
-import fs from "fs-extra";
 import spawn from "spawndamnit";
-import fileUrl from "file-url";
-import { gitdir, tempdir } from "@changesets/test-utils";
+import { pathToFileURL } from "node:url";
+// eslint-disable-next-line import/no-extraneous-dependencies
+import { describe, expect, it } from "vitest";
+import { gitdir, outputFile, tempdir } from "@changesets/test-utils";
 import writeChangeset from "@changesets/write";
 
 import {
-  getCommitsThatAddFiles,
-  getChangedFilesSince,
   add,
   commit,
-  tag,
-  getDivergedCommit,
-  getChangedPackagesSinceRef,
-  getChangedChangesetFilesSinceRef,
   getAllTags,
-  tagExists,
+  getChangedChangesetFilesSinceRef,
+  getChangedFilesSince,
+  getChangedPackagesSinceRef,
+  getCommitsThatAddFiles,
   getCurrentCommitId,
-} from "./";
+  getDivergedCommit,
+  tag,
+  tagExists,
+} from "./index.ts";
 
 async function getCommitCount(cwd: string) {
   const cmd = await spawn("git", ["rev-list", "--count", "HEAD"], { cwd });
@@ -34,7 +35,7 @@ describe("git", () => {
 
       const firstSha = await getCurrentCommitId({ cwd });
 
-      await fs.outputFile(path.join(cwd, "b.js"), 'export default "updated b"');
+      await outputFile(path.join(cwd, "b.js"), 'export default "updated b"');
       await commit("update b", cwd);
 
       const secondSha = await getCurrentCommitId({ cwd });
@@ -55,7 +56,7 @@ describe("git", () => {
       // Create a new branch, and add a commit to it.
       await spawn("git", ["checkout", "-b", "my-branch"], { cwd });
 
-      await fs.outputFile(path.join(cwd, "b.js"), 'export default "updated b"');
+      await outputFile(path.join(cwd, "b.js"), 'export default "updated b"');
       await commit("update b", cwd);
 
       // Now, get the latest commit from our new branch.
@@ -75,7 +76,7 @@ describe("git", () => {
         "b.js": 'export default "b"',
       });
 
-      await fs.outputFile(path.join(cwd, "a.js"), 'export default "updated a"');
+      await outputFile(path.join(cwd, "a.js"), 'export default "updated a"');
       await add("a.js", cwd);
 
       const gitCmd = await spawn("git", ["diff", "--name-only", "--cached"], {
@@ -96,8 +97,8 @@ describe("git", () => {
         "c.js": 'export default "c"',
       });
 
-      await fs.outputFile(path.join(cwd, "a.js"), 'export default "updated a"');
-      await fs.outputFile(path.join(cwd, "c.js"), 'export default "updated c"');
+      await outputFile(path.join(cwd, "a.js"), 'export default "updated a"');
+      await outputFile(path.join(cwd, "c.js"), 'export default "updated c"');
       await add("a.js", cwd);
       await add("c.js", cwd);
 
@@ -120,11 +121,11 @@ describe("git", () => {
         "foo/b.js": 'export default "b"',
       });
 
-      await fs.outputFile(
+      await outputFile(
         path.join(cwd, "foo/a.js"),
         'export default "updated a"'
       );
-      await fs.outputFile(
+      await outputFile(
         path.join(cwd, "foo/b.js"),
         'export default "updated b"'
       );
@@ -148,7 +149,7 @@ describe("git", () => {
         "a.js": 'export default "a"',
       });
 
-      await fs.outputFile(path.join(cwd, "a.js"), 'export default "updated a"');
+      await outputFile(path.join(cwd, "a.js"), 'export default "updated a"');
       await add("a.js", cwd);
       await commit("update a.js", cwd);
 
@@ -204,7 +205,7 @@ describe("git", () => {
       });
       await tag("tag_message", cwd);
 
-      await fs.outputFile(path.join(cwd, "b.js"), 'export default "updated b"');
+      await outputFile(path.join(cwd, "b.js"), 'export default "updated b"');
       await add("b.js", cwd);
       await commit("update b", cwd);
 
@@ -294,7 +295,13 @@ describe("git", () => {
           "git",
           // Note: a file:// URL is needed in order to make a shallow clone of
           // a local repo
-          ["clone", "--depth", depth.toString(), fileUrl(cwd), "."],
+          [
+            "clone",
+            "--depth",
+            depth.toString(),
+            pathToFileURL(cwd).toString(),
+            ".",
+          ],
           {
             cwd: cloneDir,
           }
@@ -311,7 +318,7 @@ describe("git", () => {
         // the commit we're going to scan for is the latest commit,
         // so will be in the shallow clone immediately without deepening
         await createDummyCommits(10, cwd);
-        await fs.outputFile(path.join(cwd, "b.js"), 'export default "b"');
+        await outputFile(path.join(cwd, "b.js"), 'export default "b"');
         const originalCommit = await addFileAndCommit("b.js", cwd);
 
         const clone = await createShallowClone(5, cwd);
@@ -333,7 +340,7 @@ describe("git", () => {
         // We're going to create a repo where the commit we're looking for isn't
         // in the shallow clone, so we'll need to deepen it to locate it.
         await createDummyCommits((shallowCloneDeepeningAmount * 2) / 3, cwd);
-        await fs.outputFile(path.join(cwd, "b.js"), 'export default "b"');
+        await outputFile(path.join(cwd, "b.js"), 'export default "b"');
         const originalCommit = await addFileAndCommit("b.js", cwd);
         await createDummyCommits((shallowCloneDeepeningAmount * 2) / 3, cwd);
 
@@ -349,7 +356,7 @@ describe("git", () => {
         const originalRepoDepth = await getCommitCount(cwd);
         expect(await getCommitCount(clone)).toBeGreaterThan(5);
         expect(await getCommitCount(clone)).toBeLessThan(originalRepoDepth);
-      });
+      }, 10_000);
 
       it("reads the SHA of a file-add even if the first commit of a repo", async () => {
         const cwd = await gitdir({
@@ -371,7 +378,7 @@ describe("git", () => {
         // We should have fully deepened
         const originalRepoDepth = await getCommitCount(cwd);
         expect(await getCommitCount(clone)).toEqual(originalRepoDepth);
-      });
+      }, 10_000);
 
       it("can return SHAs for multiple files including return blanks for missing files", async () => {
         const cwd = await gitdir({
@@ -382,12 +389,12 @@ describe("git", () => {
         // for the files that succeed.
         await createDummyCommits(shallowCloneDeepeningAmount, cwd);
 
-        await fs.outputFile(path.join(cwd, "b.js"), 'export default "b"');
+        await outputFile(path.join(cwd, "b.js"), 'export default "b"');
         const originalCommit1 = await addFileAndCommit("b.js", cwd);
 
         await createDummyCommits(shallowCloneDeepeningAmount, cwd);
 
-        await fs.outputFile(path.join(cwd, "c.js"), 'export default "c"');
+        await outputFile(path.join(cwd, "c.js"), 'export default "c"');
         const originalCommit2 = await addFileAndCommit("c.js", cwd);
 
         const clone = await createShallowClone(5, cwd);
@@ -398,7 +405,7 @@ describe("git", () => {
         );
 
         expect(commits).toEqual([originalCommit1, undefined, originalCommit2]);
-      });
+      }, 10_000);
     });
   });
 
@@ -442,12 +449,12 @@ describe("git", () => {
       });
 
       const firstRef = await getCurrentCommitId({ cwd });
-      await fs.outputFile(path.join(cwd, "b.js"), 'export default "updated b"');
+      await outputFile(path.join(cwd, "b.js"), 'export default "updated b"');
       await add("b.js", cwd);
       await commit("update b.js", cwd);
 
       const secondRef = await getCurrentCommitId({ cwd });
-      await fs.outputFile(path.join(cwd, "d.js"), 'export default "updated d"');
+      await outputFile(path.join(cwd, "d.js"), 'export default "updated d"');
       await add("d.js", cwd);
       await commit("update d.js", cwd);
 
@@ -472,14 +479,14 @@ describe("git", () => {
 
       const ref = await getCurrentCommitId({ cwd });
 
-      await fs.outputFile(
+      await outputFile(
         path.join(cwd, "packages/pkg-b/b.js"),
         'export default "updated b"'
       );
       await add("packages/pkg-b/b.js", cwd);
       await commit("update b.js", cwd);
 
-      await fs.outputFile(
+      await outputFile(
         path.join(cwd, "packages/pkg-c/c.js"),
         'export default "updated c"'
       );
@@ -521,7 +528,7 @@ describe("git", () => {
         "packages/pkg-a/a.js": 'export default "a"',
       });
 
-      await fs.outputFile(
+      await outputFile(
         path.join(cwd, "packages/pkg-a/a.js"),
         'export default "updated a"'
       );
@@ -558,7 +565,7 @@ describe("git", () => {
 
       await spawn("git", ["checkout", "-b", "new-branch"], { cwd });
 
-      await fs.outputFile(
+      await outputFile(
         path.join(cwd, "packages/pkg-b/package.json"),
         JSON.stringify({
           name: "pkg-b",
@@ -567,7 +574,7 @@ describe("git", () => {
       );
       await commit("update pkg-b", cwd);
 
-      await fs.outputFile(
+      await outputFile(
         path.join(cwd, "packages/pkg-d/package.json"),
         JSON.stringify({
           name: "pkg-d",
@@ -605,7 +612,7 @@ describe("git", () => {
 
       const newFilePath = "packages/pkg-a/examples/example-a/file.js";
 
-      await fs.outputFile(
+      await outputFile(
         path.join(cwd, newFilePath),
         "console.log('hello world');"
       );
@@ -641,7 +648,7 @@ describe("git", () => {
 
       const newFilePath = "packages/pkg-a/examples/example-a/file.js";
 
-      await fs.outputFile(
+      await outputFile(
         path.join(cwd, newFilePath),
         "console.log('hello world');"
       );
@@ -674,10 +681,7 @@ describe("git", () => {
 
       const newFilePath = "packages/pkg-a/__tests__/file.js";
 
-      await fs.outputFile(
-        path.join(cwd, newFilePath),
-        "expect(answer).toBe(42);"
-      );
+      await outputFile(path.join(cwd, newFilePath), "expect(answer).toBe(42);");
 
       await add(newFilePath, cwd);
       await commit("new test file", cwd);
@@ -706,7 +710,7 @@ describe("git", () => {
 
       const newFilePath = "packages/pkg-a/src/index.js";
 
-      await fs.outputFile(
+      await outputFile(
         path.join(cwd, newFilePath),
         "export const answer = 42;"
       );

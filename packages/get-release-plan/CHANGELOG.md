@@ -1,5 +1,13 @@
 # @changesets/get-release-plan
 
+## 4.0.15
+
+### Patch Changes
+
+- Updated dependencies [[`b6f4c74`](https://github.com/changesets/changesets/commit/b6f4c748c4ba50b5ac608f3ce41229526d1bfe94), [`6df3a5e`](https://github.com/changesets/changesets/commit/6df3a5e95522a0210cb2b5619588a75f32b502c6), [`6df3a5e`](https://github.com/changesets/changesets/commit/6df3a5e95522a0210cb2b5619588a75f32b502c6)]:
+  - @changesets/config@3.1.3
+  - @changesets/read@0.6.7
+
 ## 4.0.14
 
 ### Patch Changes
@@ -7,6 +15,21 @@
 - Updated dependencies [[`cc28222`](https://github.com/changesets/changesets/commit/cc28222ee892b3a078fa02ee26e1cef98c171532), [`13dace8`](https://github.com/changesets/changesets/commit/13dace895017fa351014bc9e13b544d33f8b4bbe)]:
   - @changesets/config@3.1.2
   - @changesets/read@0.6.6
+
+## 5.0.0-next.1
+
+### Major Changes
+
+- [#1656](https://github.com/changesets/changesets/pull/1656) [`268a29f`](https://github.com/changesets/changesets/commit/268a29fedc948f22c672a3b1e3e51df4427f478d) Thanks [@bluwy](https://github.com/bluwy)! - Bumps minimum node version to `>=20.0.0`
+
+### Patch Changes
+
+- Updated dependencies [[`268a29f`](https://github.com/changesets/changesets/commit/268a29fedc948f22c672a3b1e3e51df4427f478d), [`b83787f`](https://github.com/changesets/changesets/commit/b83787fb090dc03ad566a7d8b7e286dbe93e2301)]:
+  - @changesets/assemble-release-plan@7.0.0-next.1
+  - @changesets/config@4.0.0-next.1
+  - @changesets/types@7.0.0-next.1
+  - @changesets/read@1.0.0-next.1
+  - @changesets/pre@3.0.0-next.1
 
 ## 4.0.13
 
@@ -28,6 +51,23 @@
 
 - Updated dependencies [[`de8bebc`](https://github.com/changesets/changesets/commit/de8bebc93b81cb333c3c7e1ed8a3687926b7fcd8)]:
   - @changesets/assemble-release-plan@6.0.7
+
+## 5.0.0-next.0
+
+### Major Changes
+
+- [#1479](https://github.com/changesets/changesets/pull/1479) [`7f34a00`](https://github.com/changesets/changesets/commit/7f34a00aab779a941a406b17f5a85895144fc0a5) Thanks [@bluwy](https://github.com/bluwy)! - Add `"engines"` field for explicit node version support. The supported node versions are `>=18.0.0`.
+
+- [#1482](https://github.com/changesets/changesets/pull/1482) [`df424a4`](https://github.com/changesets/changesets/commit/df424a4a09eea15b0fa9159ee0b98af0d95f58a7) Thanks [@Andarist](https://github.com/Andarist)! - From now on this package is going to be published as ES module.
+
+### Patch Changes
+
+- Updated dependencies [[`e0e1748`](https://github.com/changesets/changesets/commit/e0e1748369b1f936c665b62590a76a0d57d1545e), [`6d1f384`](https://github.com/changesets/changesets/commit/6d1f384c8feab091f58443f6f7ee2ada64e0e7cc), [`7f34a00`](https://github.com/changesets/changesets/commit/7f34a00aab779a941a406b17f5a85895144fc0a5), [`df424a4`](https://github.com/changesets/changesets/commit/df424a4a09eea15b0fa9159ee0b98af0d95f58a7)]:
+  - @changesets/config@4.0.0-next.0
+  - @changesets/read@1.0.0-next.0
+  - @changesets/pre@3.0.0-next.0
+  - @changesets/assemble-release-plan@7.0.0-next.0
+  - @changesets/types@7.0.0-next.0
 
 ## 4.0.10
 

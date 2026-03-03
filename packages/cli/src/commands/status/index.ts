@@ -1,44 +1,34 @@
 import pc from "picocolors";
-import fs from "fs-extra";
+import fs from "node:fs/promises";
 import path from "path";
 import getReleasePlan from "@changesets/get-release-plan";
-import { error, info, log, warn } from "@changesets/logger";
-import {
+import { error, info, log } from "@changesets/logger";
+import type {
   ComprehensiveRelease,
   Config,
   Release,
   VersionType,
 } from "@changesets/types";
-import { getVersionableChangedPackages } from "../../utils/versionablePackages";
+import { getVersionableChangedPackages } from "../../utils/versionablePackages.ts";
 
 export default async function status(
   cwd: string,
   {
-    sinceMaster,
     since,
     verbose,
     output,
   }: {
-    sinceMaster?: boolean;
     since?: string;
     verbose?: boolean;
     output?: string;
   },
   config: Config
 ) {
-  if (sinceMaster) {
-    warn(
-      "--sinceMaster is deprecated and will be removed in a future major version"
-    );
-    warn("Use --since=master instead");
-  }
-  const sinceBranch =
-    since === undefined ? (sinceMaster ? "master" : undefined) : since;
-  const releasePlan = await getReleasePlan(cwd, sinceBranch, config);
+  const releasePlan = await getReleasePlan(cwd, since, config);
   const { changesets, releases } = releasePlan;
   const changedPackages = await getVersionableChangedPackages(config, {
     cwd,
-    ref: sinceBranch,
+    ref: since,
   });
 
   if (changedPackages.length > 0 && changesets.length === 0) {
@@ -53,7 +43,7 @@ export default async function status(
 
   if (output) {
     await fs.writeFile(
-      path.join(cwd, output),
+      path.resolve(cwd, output),
       JSON.stringify(releasePlan, undefined, 2)
     );
     return;

@@ -1,5 +1,20 @@
 # @changesets/apply-release-plan
 
+## 7.1.0
+
+### Minor Changes
+
+- [#1774](https://github.com/changesets/changesets/pull/1774) [`667fe5a`](https://github.com/changesets/changesets/commit/667fe5aacf04dbefcf2532584ff2753b8417855a) Thanks [@bluwy](https://github.com/bluwy)! - Support importing custom `changelog` option ES module. Previously, it used `require()` which only worked for CJS modules, however now it uses `import()` which supports both CJS and ES modules.
+
+### Patch Changes
+
+- [#1859](https://github.com/changesets/changesets/pull/1859) [`1772598`](https://github.com/changesets/changesets/commit/1772598270a59ba1fa7b0ef7e675fce6a575f850) Thanks [@mixelburg](https://github.com/mixelburg)! - Fix changelog entry insertion when no package title is present in the `CHANGELOG.md` file.
+
+- [#1810](https://github.com/changesets/changesets/pull/1810) [`27fd8f4`](https://github.com/changesets/changesets/commit/27fd8f41dddafcc2e96e7df39dca04d92f916a0a) Thanks [@hirasso](https://github.com/hirasso)! - Replace deprecated `String.prototype.trimRight` with [`String.prototype.trimEnd`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String/trimEnd)
+
+- Updated dependencies [[`b6f4c74`](https://github.com/changesets/changesets/commit/b6f4c748c4ba50b5ac608f3ce41229526d1bfe94), [`6df3a5e`](https://github.com/changesets/changesets/commit/6df3a5e95522a0210cb2b5619588a75f32b502c6), [`6df3a5e`](https://github.com/changesets/changesets/commit/6df3a5e95522a0210cb2b5619588a75f32b502c6)]:
+  - @changesets/config@3.1.3
+
 ## 7.0.14
 
 ### Patch Changes
@@ -14,6 +29,42 @@
 ### Patch Changes
 
 - [#1725](https://github.com/changesets/changesets/pull/1725) [`957f24e`](https://github.com/changesets/changesets/commit/957f24ed0446494c5709189ae57583f72c716d43) Thanks [@colinaaa](https://github.com/colinaaa)! - Fix an issue that caused an incorrect `CHANGELOG` to be generated when a changeset contained a special string replacement pattern.
+
+## 8.0.0-next.1
+
+### Major Changes
+
+- [#1656](https://github.com/changesets/changesets/pull/1656) [`268a29f`](https://github.com/changesets/changesets/commit/268a29fedc948f22c672a3b1e3e51df4427f478d) Thanks [@bluwy](https://github.com/bluwy)! - Bumps minimum node version to `>=20.0.0`
+
+### Patch Changes
+
+- Updated dependencies [[`268a29f`](https://github.com/changesets/changesets/commit/268a29fedc948f22c672a3b1e3e51df4427f478d), [`b83787f`](https://github.com/changesets/changesets/commit/b83787fb090dc03ad566a7d8b7e286dbe93e2301)]:
+  - @changesets/get-version-range-type@1.0.0-next.1
+  - @changesets/should-skip-package@1.0.0-next.1
+  - @changesets/config@4.0.0-next.1
+  - @changesets/types@7.0.0-next.1
+  - @changesets/git@4.0.0-next.1
+
+## 8.0.0-next.0
+
+### Major Changes
+
+- [#1479](https://github.com/changesets/changesets/pull/1479) [`7f34a00`](https://github.com/changesets/changesets/commit/7f34a00aab779a941a406b17f5a85895144fc0a5) Thanks [@bluwy](https://github.com/bluwy)! - Add `"engines"` field for explicit node version support. The supported node versions are `>=18.0.0`.
+
+- [#1482](https://github.com/changesets/changesets/pull/1482) [`df424a4`](https://github.com/changesets/changesets/commit/df424a4a09eea15b0fa9159ee0b98af0d95f58a7) Thanks [@Andarist](https://github.com/Andarist)! - From now on this package is going to be published as ES module.
+
+### Patch Changes
+
+- [#1476](https://github.com/changesets/changesets/pull/1476) [`e0e1748`](https://github.com/changesets/changesets/commit/e0e1748369b1f936c665b62590a76a0d57d1545e) Thanks [@pralkarz](https://github.com/pralkarz)! - Replace `fs-extra` usage with `node:fs`
+
+- [#1617](https://github.com/changesets/changesets/pull/1617) [`8f7b607`](https://github.com/changesets/changesets/commit/8f7b607b486e299e038bf8e257d28f0193ac4412) Thanks [@bluwy](https://github.com/bluwy)! - Move `outdent` as a dev dependency
+
+- Updated dependencies [[`e0e1748`](https://github.com/changesets/changesets/commit/e0e1748369b1f936c665b62590a76a0d57d1545e), [`7f34a00`](https://github.com/changesets/changesets/commit/7f34a00aab779a941a406b17f5a85895144fc0a5), [`3628cab`](https://github.com/changesets/changesets/commit/3628cab6cbfd931b7f2a909b38b66c1aa794d4bf), [`df424a4`](https://github.com/changesets/changesets/commit/df424a4a09eea15b0fa9159ee0b98af0d95f58a7)]:
+  - @changesets/config@4.0.0-next.0
+  - @changesets/git@4.0.0-next.0
+  - @changesets/get-version-range-type@1.0.0-next.0
+  - @changesets/should-skip-package@1.0.0-next.0
+  - @changesets/types@7.0.0-next.0
 
 ## 7.0.12
 

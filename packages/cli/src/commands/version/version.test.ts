@@ -1,52 +1,33 @@
-import fs from "fs-extra";
-import path from "path";
-import * as git from "@changesets/git";
-import { warn } from "@changesets/logger";
-import { silenceLogsInBlock, testdir } from "@changesets/test-utils";
-import writeChangeset from "@changesets/write";
-import { Config, Changeset } from "@changesets/types";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  type Mock,
+  vi,
+} from "vitest";
 import { defaultConfig } from "@changesets/config";
+import * as git from "@changesets/git";
+import {
+  linkNodeModules,
+  mockedLogger,
+  silenceLogsInBlock,
+  testdir,
+} from "@changesets/test-utils";
+import type { Changeset, Config } from "@changesets/types";
+import writeChangeset from "@changesets/write";
 import { getPackages } from "@manypkg/get-packages";
-import pre from "../pre";
-import version from "./index";
-import humanId from "human-id";
+import { humanId } from "human-id";
+import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import path from "node:path";
+import pre from "../pre/index.ts";
+import version from "./index.ts";
 
-function mockGlobalDate<
-  Args extends any[],
-  Return extends Promise<void> | void
->(
-  testFn: (...args: Args) => Return,
-  fixedDate: string = "2021-12-13T00:07:30.879Z"
-) {
-  return async (...args: Args) => {
-    const originalDate = Date;
-    const MockedDate = class MockedDate extends Date {
-      constructor() {
-        super(fixedDate);
-      }
-
-      static now() {
-        return new MockedDate().getTime();
-      }
-    } as typeof Date;
-
-    // eslint-disable-next-line no-global-assign
-    Date = MockedDate;
-
-    try {
-      await testFn(...args);
-    } finally {
-      // eslint-disable-next-line no-global-assign
-      Date = originalDate;
-    }
-  };
-}
-
-let changelogPath = path.resolve(__dirname, "../../changelog");
-let commitPath = path.resolve(__dirname, "../../commit");
 let modifiedDefaultConfig: Config = {
   ...defaultConfig,
-  changelog: [changelogPath, null],
+  changelog: ["@changesets/cli/changelog", null],
 };
 
 let defaultOptions = {
@@ -57,24 +38,18 @@ let defaultOptions = {
 // This is from bolt's error log
 const consoleError = console.error;
 
-jest.mock("../../utils/cli-utilities");
-jest.mock("@changesets/git");
-jest.mock("human-id");
-jest.mock("@changesets/logger");
+vi.mock("human-id");
+vi.mock("@changesets/logger");
 
-// @ts-ignore
-git.add.mockImplementation(() => Promise.resolve(true));
-// @ts-ignore
-git.commit.mockImplementation(() => Promise.resolve(true));
-// @ts-ignore
-git.getCommitsThatAddFiles.mockImplementation((changesetIds) =>
-  Promise.resolve(changesetIds.map(() => "g1th4sh"))
+vi.mock("@changesets/git");
+const mockedGit = vi.mocked(git);
+mockedGit.add.mockImplementation(async () => true);
+mockedGit.commit.mockImplementation(async () => true);
+mockedGit.getCommitsThatAddFiles.mockImplementation(async (changesetIds) =>
+  changesetIds.map(() => "g1th4sh")
 );
-// @ts-ignore
-git.getCurrentCommitId.mockImplementation(() => Promise.resolve("abcdef"));
-
-// @ts-ignore
-git.tag.mockImplementation(() => Promise.resolve(true));
+mockedGit.getCurrentCommitId.mockImplementation(async () => "abcdef");
+mockedGit.tag.mockImplementation(async () => true);
 
 const writeChangesets = (changesets: Changeset[], cwd: string) => {
   return Promise.all(
@@ -82,42 +57,43 @@ const writeChangesets = (changesets: Changeset[], cwd: string) => {
   );
 };
 
-const getFile = (pkgName: string, fileName: string, calls: any) => {
-  let castCalls: [string, string][] = calls;
-  const foundCall = castCalls.find((call) =>
-    call[0].endsWith(`${pkgName}${path.sep}${fileName}`)
-  );
-  if (!foundCall)
-    throw new Error(`could not find writing of ${fileName} for: ${pkgName}`);
-
-  // return written content
-  return foundCall[1];
+const getFilePath = async (pkgName: string, fileName: string, cwd: string) => {
+  const packages = await getPackages(cwd);
+  const pkg = packages.packages.find((pkg) => pkg.packageJson.name === pkgName);
+  assert(pkg, `could not find package: ${pkgName}`);
+  return path.join(pkg.dir, fileName);
 };
 
-const getPkgJSON = (pkgName: string, calls: any) => {
-  return JSON.parse(getFile(pkgName, "package.json", calls));
+const getFile = async (pkgName: string, fileName: string, cwd: string) => {
+  return fs.readFile(await getFilePath(pkgName, fileName, cwd), "utf8");
 };
 
-const getChangelog = (pkgName: string, calls: any) => {
-  return getFile(pkgName, "CHANGELOG.md", calls);
+const getPkgJSON = async (pkgName: string, cwd: string) => {
+  return JSON.parse(await getFile(pkgName, "package.json", cwd));
+};
+
+const getChangelog = async (pkgName: string, cwd: string) => {
+  return getFile(pkgName, "CHANGELOG.md", cwd);
 };
 
 beforeEach(() => {
   let i = 0;
-  (humanId as jest.Mock<string, []>).mockImplementation(() => {
+  (humanId as Mock<() => string>).mockImplementation(() => {
     return `some-id-${i++}`;
   });
 
-  console.error = jest.fn();
+  console.error = vi.fn();
+
+  vi.setSystemTime(vi.getRealSystemTime());
 });
 
 afterEach(() => {
   console.error = consoleError;
 });
 
-describe("running version in a simple project", () => {
-  silenceLogsInBlock();
+silenceLogsInBlock();
 
+describe("running version in a simple project", () => {
   describe("when there are no changeset commits", () => {
     it("should warn if no changeset commits exist", async () => {
       const cwd = await testdir({
@@ -132,8 +108,7 @@ describe("running version in a simple project", () => {
         ".changeset/config.json": JSON.stringify({}),
       });
       await version(cwd, defaultOptions, modifiedDefaultConfig);
-      // @ts-ignore
-      const loggerWarnCalls = warn.mock.calls;
+      const loggerWarnCalls = mockedLogger.warn!.mock.calls;
       expect(loggerWarnCalls.length).toEqual(1);
       expect(loggerWarnCalls[0][0]).toEqual(
         "No unreleased changesets found, exiting."
@@ -172,14 +147,13 @@ describe("running version in a simple project", () => {
         ],
         cwd
       );
-      const spy = jest.spyOn(fs, "writeFile");
 
       await version(cwd, defaultOptions, modifiedDefaultConfig);
 
-      expect(getPkgJSON("pkg-a", spy.mock.calls)).toEqual(
+      expect(await getPkgJSON("pkg-a", cwd)).toEqual(
         expect.objectContaining({ name: "pkg-a", version: "1.1.0" })
       );
-      expect(getPkgJSON("pkg-b", spy.mock.calls)).toEqual(
+      expect(await getPkgJSON("pkg-b", cwd)).toEqual(
         expect.objectContaining({ name: "pkg-b", version: "1.0.1" })
       );
     });
@@ -212,18 +186,20 @@ describe("running version in a simple project", () => {
       ],
       cwd
     );
-    const spy = jest.spyOn(fs, "writeFile");
 
     await version(cwd, defaultOptions, {
       ...modifiedDefaultConfig,
       ignore: ["pkg-a"],
     });
 
-    const bumpedPackageA = !!spy.mock.calls.find((call: string[]) =>
-      call[0].endsWith(`pkg-a${path.sep}package.json`)
-    );
-
-    expect(bumpedPackageA).toBe(false);
+    // no change
+    expect(await getPkgJSON("pkg-a", cwd)).toEqual({
+      name: "pkg-a",
+      version: "1.0.0",
+      dependencies: {
+        "pkg-b": "1.0.0",
+      },
+    });
   });
 
   it("should not bump ignored packages", async () => {
@@ -301,7 +277,7 @@ describe("running version in a simple project", () => {
       ],
       cwd
     );
-    const spy = jest.spyOn(git, "commit");
+    const spy = vi.spyOn(git, "commit");
 
     await version(cwd, defaultOptions, modifiedDefaultConfig);
 
@@ -326,6 +302,9 @@ describe("running version in a simple project", () => {
         version: "1.0.0",
       }),
     });
+
+    await linkNodeModules(cwd);
+
     const ids = await writeChangesets(
       [
         {
@@ -338,13 +317,13 @@ describe("running version in a simple project", () => {
       ],
       cwd
     );
-    const spy = jest.spyOn(git, "add");
+    const spy = vi.spyOn(git, "add");
 
     expect(spy).not.toHaveBeenCalled();
 
     await version(cwd, defaultOptions, {
       ...modifiedDefaultConfig,
-      commit: [commitPath, null],
+      commit: ["@changesets/cli/commit", null],
     });
 
     expect(spy).toHaveBeenCalled();
@@ -391,6 +370,9 @@ describe("running version in a simple project", () => {
         version: "1.0.0",
       }),
     });
+
+    await linkNodeModules(cwd);
+
     await writeChangesets(
       [
         {
@@ -403,13 +385,13 @@ describe("running version in a simple project", () => {
       ],
       cwd
     );
-    const spy = jest.spyOn(git, "commit");
+    const spy = vi.spyOn(git, "commit");
 
     expect(spy).not.toHaveBeenCalled();
 
     await version(cwd, defaultOptions, {
       ...modifiedDefaultConfig,
-      commit: [commitPath, null],
+      commit: ["@changesets/cli/commit", null],
     });
 
     expect(spy).toHaveBeenCalled();
@@ -524,8 +506,6 @@ Awesome feature, hidden behind a feature flag
   });
 
   it("should ignore special string replacement patterns in appended changesets", async () => {
-    const spy = jest.spyOn(fs, "writeFile");
-
     const cwd = await testdir({
       "package.json": JSON.stringify({
         private: true,
@@ -555,7 +535,7 @@ Awesome feature, hidden behind a feature flag
 
     await version(cwd, defaultOptions, modifiedDefaultConfig);
 
-    expect(getChangelog("pkg-a", spy.mock.calls)).toMatchInlineSnapshot(`
+    expect(await getChangelog("pkg-a", cwd)).toMatchInlineSnapshot(`
       "# pkg-a
 
       ## 2.0.0
@@ -608,14 +588,13 @@ Awesome feature, hidden behind a feature flag
         ],
         cwd
       );
-      const spy = jest.spyOn(fs, "writeFile");
 
       await version(cwd, defaultOptions, modifiedDefaultConfig);
 
-      expect(getPkgJSON("pkg-a", spy.mock.calls)).toEqual(
+      expect(await getPkgJSON("pkg-a", cwd)).toEqual(
         expect.objectContaining({ name: "pkg-a", version: "1.1.0" })
       );
-      expect(getPkgJSON("pkg-b", spy.mock.calls)).toEqual(
+      expect(await getPkgJSON("pkg-b", cwd)).toEqual(
         expect.objectContaining({ name: "pkg-b", version: "1.0.1" })
       );
     });
@@ -654,18 +633,17 @@ Awesome feature, hidden behind a feature flag
         ],
         cwd
       );
-      const spy = jest.spyOn(fs, "writeFile");
       await version(cwd, defaultOptions, modifiedDefaultConfig);
 
       // first call should be minor bump
-      expect(getPkgJSON("pkg-a", spy.mock.calls)).toEqual(
+      expect(await getPkgJSON("pkg-a", cwd)).toEqual(
         expect.objectContaining({
           name: "pkg-a",
           version: "1.1.0",
         })
       );
       // second should be a patch
-      expect(getPkgJSON("pkg-b", spy.mock.calls)).toEqual(
+      expect(await getPkgJSON("pkg-b", cwd)).toEqual(
         expect.objectContaining({
           name: "pkg-b",
           version: "1.0.1",
@@ -748,17 +726,16 @@ describe("fixed", () => {
       ],
       cwd
     );
-    const spy = jest.spyOn(fs, "writeFile");
 
     await version(cwd, defaultOptions, {
       ...modifiedDefaultConfig,
       fixed: [["pkg-a", "pkg-b"]],
     });
 
-    expect(getPkgJSON("pkg-a", spy.mock.calls)).toEqual(
+    expect(await getPkgJSON("pkg-a", cwd)).toEqual(
       expect.objectContaining({ name: "pkg-a", version: "1.1.0" })
     );
-    expect(getPkgJSON("pkg-b", spy.mock.calls)).toEqual(
+    expect(await getPkgJSON("pkg-b", cwd)).toEqual(
       expect.objectContaining({ name: "pkg-b", version: "1.1.0" })
     );
   });
@@ -833,7 +810,6 @@ describe("fixed", () => {
         version: "1.0.0",
       }),
     });
-    const spy = jest.spyOn(fs, "writeFile");
 
     await writeChangesets(
       [
@@ -850,7 +826,7 @@ describe("fixed", () => {
       fixed: [["pkg-a", "pkg-b"]],
     });
 
-    expect(getChangelog("pkg-a", spy.mock.calls)).toMatchInlineSnapshot(`
+    expect(await getChangelog("pkg-a", cwd)).toMatchInlineSnapshot(`
       "# pkg-a
 
       ## 1.1.0
@@ -864,14 +840,12 @@ describe("fixed", () => {
       - pkg-b@1.1.0
       "
     `);
-    expect(getChangelog("pkg-b", spy.mock.calls)).toMatchInlineSnapshot(`
+    expect(await getChangelog("pkg-b", cwd)).toMatchInlineSnapshot(`
       "# pkg-b
 
       ## 1.1.0
       "
     `);
-
-    spy.mockClear();
 
     await writeChangesets(
       [
@@ -888,7 +862,7 @@ describe("fixed", () => {
       fixed: [["pkg-a", "pkg-b"]],
     });
 
-    expect(getChangelog("pkg-a", spy.mock.calls)).toMatchInlineSnapshot(`
+    expect(await getChangelog("pkg-a", cwd)).toMatchInlineSnapshot(`
       "# pkg-a
 
       ## 1.2.0
@@ -912,7 +886,7 @@ describe("fixed", () => {
       - pkg-b@1.1.0
       "
     `);
-    expect(getChangelog("pkg-b", spy.mock.calls)).toMatchInlineSnapshot(`
+    expect(await getChangelog("pkg-b", cwd)).toMatchInlineSnapshot(`
       "# pkg-b
 
       ## 1.2.0
@@ -954,17 +928,16 @@ describe("linked", () => {
       ],
       cwd
     );
-    const spy = jest.spyOn(fs, "writeFile");
 
     await version(cwd, defaultOptions, {
       ...modifiedDefaultConfig,
       linked: [["pkg-a", "pkg-b"]],
     });
 
-    expect(getPkgJSON("pkg-a", spy.mock.calls)).toEqual(
+    expect(await getPkgJSON("pkg-a", cwd)).toEqual(
       expect.objectContaining({ name: "pkg-a", version: "1.1.0" })
     );
-    expect(getPkgJSON("pkg-b", spy.mock.calls)).toEqual(
+    expect(await getPkgJSON("pkg-b", cwd)).toEqual(
       expect.objectContaining({ name: "pkg-b", version: "1.1.0" })
     );
   });
@@ -996,14 +969,13 @@ describe("linked", () => {
       ],
       cwd
     );
-    const spy = jest.spyOn(fs, "writeFile");
 
     await version(cwd, defaultOptions, {
       ...modifiedDefaultConfig,
       linked: [["pkg-1", "pkg-2"]],
     });
 
-    expect(getPkgJSON("pkg-a", spy.mock.calls)).toEqual(
+    expect(await getPkgJSON("pkg-a", cwd)).toEqual(
       expect.objectContaining({ name: "pkg-a", version: "1.1.0" })
     );
   });
@@ -1208,7 +1180,6 @@ describe("workspace range", () => {
       }),
     });
 
-    const spy = jest.spyOn(fs, "writeFile");
     await writeChangeset(
       {
         summary: "This is a summary",
@@ -1224,7 +1195,7 @@ describe("workspace range", () => {
       },
     });
 
-    expect(getChangelog("pkg-a", spy.mock.calls)).toMatchInlineSnapshot(`
+    expect(await getChangelog("pkg-a", cwd)).toMatchInlineSnapshot(`
       "# pkg-a
 
       ## 1.1.0
@@ -1235,7 +1206,7 @@ describe("workspace range", () => {
       "
     `);
 
-    expect(getChangelog("pkg-b", spy.mock.calls)).toMatchInlineSnapshot(`
+    expect(await getChangelog("pkg-b", cwd)).toMatchInlineSnapshot(`
       "# pkg-b
 
       ## 1.0.1
@@ -1265,7 +1236,6 @@ describe("workspace range", () => {
       }),
     });
 
-    const spy = jest.spyOn(fs, "writeFile");
     await writeChangeset(
       {
         summary: "This is a summary",
@@ -1275,7 +1245,7 @@ describe("workspace range", () => {
     );
     await version(cwd, defaultOptions, modifiedDefaultConfig);
 
-    expect(getChangelog("pkg-a", spy.mock.calls)).toMatchInlineSnapshot(`
+    expect(await getChangelog("pkg-a", cwd)).toMatchInlineSnapshot(`
       "# pkg-a
 
       ## 1.1.0
@@ -1286,7 +1256,7 @@ describe("workspace range", () => {
       "
     `);
 
-    expect(getChangelog("pkg-b", spy.mock.calls)).toMatchInlineSnapshot(`
+    expect(await getChangelog("pkg-b", cwd)).toMatchInlineSnapshot(`
       "# pkg-b
 
       ## 2.0.0
@@ -1316,7 +1286,6 @@ describe("workspace range", () => {
       }),
     });
 
-    const spy = jest.spyOn(fs, "writeFile");
     await writeChangeset(
       {
         summary: "This is a summary",
@@ -1332,7 +1301,7 @@ describe("workspace range", () => {
       },
     });
 
-    expect(getChangelog("pkg-a", spy.mock.calls)).toMatchInlineSnapshot(`
+    expect(await getChangelog("pkg-a", cwd)).toMatchInlineSnapshot(`
       "# pkg-a
 
       ## 1.1.0
@@ -1344,7 +1313,7 @@ describe("workspace range", () => {
     `);
 
     // `pkg-b` should not be touched
-    expect(() => getChangelog("pkg-b", spy.mock.calls)).toThrowError();
+    await expect(() => getChangelog("pkg-b", cwd)).rejects.toThrowError();
   });
 });
 
@@ -1436,7 +1405,6 @@ describe("snapshot release", () => {
       ],
       cwd
     );
-    const spy = jest.spyOn(fs, "writeFile");
     await version(
       cwd,
       {
@@ -1447,14 +1415,14 @@ describe("snapshot release", () => {
         commit: false,
       }
     );
-    expect(getPkgJSON("pkg-a", spy.mock.calls)).toEqual(
+    expect(await getPkgJSON("pkg-a", cwd)).toEqual(
       expect.objectContaining({
         name: "pkg-a",
         version: expect.stringContaining("0.0.0-experimental-"),
       })
     );
 
-    expect(getPkgJSON("pkg-b", spy.mock.calls)).toEqual(
+    expect(await getPkgJSON("pkg-b", cwd)).toEqual(
       expect.objectContaining({
         name: "pkg-b",
         version: expect.stringContaining("0.0.0-experimental-"),
@@ -1492,7 +1460,7 @@ describe("snapshot release", () => {
       ],
       cwd
     );
-    const spy = jest.spyOn(git, "commit");
+    const spy = vi.spyOn(git, "commit");
 
     expect(spy).not.toHaveBeenCalled();
 
@@ -1503,7 +1471,7 @@ describe("snapshot release", () => {
       },
       {
         ...modifiedDefaultConfig,
-        commit: [commitPath, null],
+        commit: ["@changesets/cli/commit", null],
       }
     );
 
@@ -1548,47 +1516,47 @@ describe("snapshot release", () => {
     `);
   });
 
-  it(
-    "should not bump version of an ignored package when its dependency gets updated",
-    mockGlobalDate(async () => {
-      const cwd = await testdir({
-        "package.json": JSON.stringify({
-          private: true,
-          workspaces: ["packages/*"],
-        }),
-        "packages/pkg-a/package.json": JSON.stringify({
-          name: "pkg-a",
-          version: "1.0.0",
-          dependencies: {
-            "pkg-b": "1.0.0",
-          },
-        }),
-        "packages/pkg-b/package.json": JSON.stringify({
-          name: "pkg-b",
-          version: "1.0.0",
-        }),
-      });
-      await writeChangeset(
-        {
-          releases: [{ name: "pkg-b", type: "major" }],
-          summary: "a very useful summary",
-        },
-        cwd
-      );
+  it("should not bump version of an ignored package when its dependency gets updated", async () => {
+    vi.setSystemTime("2021-12-13T00:07:30.879Z");
 
-      await version(
-        cwd,
-        {
-          snapshot: true,
+    const cwd = await testdir({
+      "package.json": JSON.stringify({
+        private: true,
+        workspaces: ["packages/*"],
+      }),
+      "packages/pkg-a/package.json": JSON.stringify({
+        name: "pkg-a",
+        version: "1.0.0",
+        dependencies: {
+          "pkg-b": "1.0.0",
         },
-        {
-          ...modifiedDefaultConfig,
-          ignore: ["pkg-a"],
-        }
-      );
+      }),
+      "packages/pkg-b/package.json": JSON.stringify({
+        name: "pkg-b",
+        version: "1.0.0",
+      }),
+    });
+    await writeChangeset(
+      {
+        releases: [{ name: "pkg-b", type: "major" }],
+        summary: "a very useful summary",
+      },
+      cwd
+    );
 
-      expect((await getPackages(cwd)).packages.map((x) => x.packageJson))
-        .toMatchInlineSnapshot(`
+    await version(
+      cwd,
+      {
+        snapshot: true,
+      },
+      {
+        ...modifiedDefaultConfig,
+        ignore: ["pkg-a"],
+      }
+    );
+
+    expect((await getPackages(cwd)).packages.map((x) => x.packageJson))
+      .toMatchInlineSnapshot(`
         [
           {
             "dependencies": {
@@ -1603,8 +1571,7 @@ describe("snapshot release", () => {
           },
         ]
       `);
-    })
-  );
+  });
 
   describe("snapshotPrereleaseTemplate", () => {
     it('should throw an error when "{tag}" and empty snapshot is used', async () => {
@@ -1637,9 +1604,8 @@ describe("snapshot release", () => {
         ],
         cwd
       );
-      jest.spyOn(fs, "writeFile");
 
-      expect(
+      await expect(
         version(
           cwd,
           { snapshot: true },
@@ -1687,9 +1653,8 @@ describe("snapshot release", () => {
         ],
         cwd
       );
-      jest.spyOn(fs, "writeFile");
 
-      expect(
+      await expect(
         version(
           cwd,
           { snapshot: "test" },
@@ -1726,67 +1691,66 @@ describe("snapshot release", () => {
       [undefined, "canary", "0.0.0-canary-20211213000730"],
       [null, "alpha", "0.0.0-alpha-20211213000730"],
     ])(
-      "should customize release correctly based on snapshotPrereleaseTemplate template: %p (tag: '%p')",
-      mockGlobalDate(
-        async (snapshotTemplate, snapshotValue, expectedResult) => {
-          const cwd = await testdir({
-            "package.json": JSON.stringify({
-              private: true,
-              workspaces: ["packages/*"],
-            }),
-            "packages/pkg-a/package.json": JSON.stringify({
-              name: "pkg-a",
-              version: "1.0.0",
-              dependencies: {
-                "pkg-b": "1.0.0",
-              },
-            }),
-            "packages/pkg-b/package.json": JSON.stringify({
-              name: "pkg-b",
-              version: "1.0.0",
-            }),
-          });
-          await writeChangesets(
-            [
-              {
-                summary: "This is a summary too",
-                releases: [
-                  { name: "pkg-a", type: "minor" },
-                  { name: "pkg-b", type: "patch" },
-                ],
-              },
-            ],
-            cwd
-          );
-          const spy = jest.spyOn(fs, "writeFile");
-          await version(
-            cwd,
-            { snapshot: snapshotValue },
+      "should customize release correctly based on snapshotPrereleaseTemplate template: %s (tag: '%s')",
+      async (snapshotTemplate, snapshotValue, expectedResult) => {
+        vi.setSystemTime("2021-12-13T00:07:30.879Z");
+
+        const cwd = await testdir({
+          "package.json": JSON.stringify({
+            private: true,
+            workspaces: ["packages/*"],
+          }),
+          "packages/pkg-a/package.json": JSON.stringify({
+            name: "pkg-a",
+            version: "1.0.0",
+            dependencies: {
+              "pkg-b": "1.0.0",
+            },
+          }),
+          "packages/pkg-b/package.json": JSON.stringify({
+            name: "pkg-b",
+            version: "1.0.0",
+          }),
+        });
+        await writeChangesets(
+          [
             {
-              ...modifiedDefaultConfig,
-              commit: false,
-              snapshot: {
-                ...modifiedDefaultConfig.snapshot,
-                prereleaseTemplate: snapshotTemplate as string,
-              },
-            }
-          );
+              summary: "This is a summary too",
+              releases: [
+                { name: "pkg-a", type: "minor" },
+                { name: "pkg-b", type: "patch" },
+              ],
+            },
+          ],
+          cwd
+        );
+        await version(
+          cwd,
+          { snapshot: snapshotValue },
+          {
+            ...modifiedDefaultConfig,
+            commit: false,
+            snapshot: {
+              ...modifiedDefaultConfig.snapshot,
+              prereleaseTemplate: snapshotTemplate as string,
+            },
+          }
+        );
 
-          expect(getPkgJSON("pkg-a", spy.mock.calls)).toEqual(
-            expect.objectContaining({
-              name: "pkg-a",
-              version: expectedResult,
-            })
-          );
+        expect(await getPkgJSON("pkg-a", cwd)).toEqual(
+          expect.objectContaining({
+            name: "pkg-a",
+            version: expectedResult,
+          })
+        );
 
-          expect(getPkgJSON("pkg-b", spy.mock.calls)).toEqual(
-            expect.objectContaining({
-              name: "pkg-b",
-              version: expectedResult,
-            })
-          );
-        }
-      )
+        expect(await getPkgJSON("pkg-b", cwd)).toEqual(
+          expect.objectContaining({
+            name: "pkg-b",
+            version: expectedResult,
+          })
+        );
+      }
     );
   });
 
@@ -1821,7 +1785,6 @@ describe("snapshot release", () => {
         ],
         cwd
       );
-      const spy = jest.spyOn(fs, "writeFile");
       await version(
         cwd,
         {
@@ -1836,14 +1799,14 @@ describe("snapshot release", () => {
           },
         }
       );
-      expect(getPkgJSON("pkg-a", spy.mock.calls)).toEqual(
+      expect(await getPkgJSON("pkg-a", cwd)).toEqual(
         expect.objectContaining({
           name: "pkg-a",
           version: expect.stringContaining("1.1.0-experimental-"),
         })
       );
 
-      expect(getPkgJSON("pkg-b", spy.mock.calls)).toEqual(
+      expect(await getPkgJSON("pkg-b", cwd)).toEqual(
         expect.objectContaining({
           name: "pkg-b",
           version: expect.stringContaining("1.0.1-experimental-"),
@@ -1895,51 +1858,51 @@ describe("snapshot release", () => {
       `);
     });
 
-    it(
-      "should not bump version of an ignored package when its dependency gets updated",
-      mockGlobalDate(async () => {
-        const cwd = await testdir({
-          "package.json": JSON.stringify({
-            private: true,
-            workspaces: ["packages/*"],
-          }),
-          "packages/pkg-a/package.json": JSON.stringify({
-            name: "pkg-a",
-            version: "1.0.0",
-            dependencies: {
-              "pkg-b": "1.0.0",
-            },
-          }),
-          "packages/pkg-b/package.json": JSON.stringify({
-            name: "pkg-b",
-            version: "1.0.0",
-          }),
-        });
-        await writeChangeset(
-          {
-            releases: [{ name: "pkg-b", type: "major" }],
-            summary: "a very useful summary",
-          },
-          cwd
-        );
+    it("should not bump version of an ignored package when its dependency gets updated", async () => {
+      vi.setSystemTime("2021-12-13T00:07:30.879Z");
 
-        await version(
-          cwd,
-          {
-            snapshot: true,
+      const cwd = await testdir({
+        "package.json": JSON.stringify({
+          private: true,
+          workspaces: ["packages/*"],
+        }),
+        "packages/pkg-a/package.json": JSON.stringify({
+          name: "pkg-a",
+          version: "1.0.0",
+          dependencies: {
+            "pkg-b": "1.0.0",
           },
-          {
-            ...modifiedDefaultConfig,
-            ignore: ["pkg-a"],
-            snapshot: {
-              useCalculatedVersion: true,
-              prereleaseTemplate: null,
-            },
-          }
-        );
+        }),
+        "packages/pkg-b/package.json": JSON.stringify({
+          name: "pkg-b",
+          version: "1.0.0",
+        }),
+      });
+      await writeChangeset(
+        {
+          releases: [{ name: "pkg-b", type: "major" }],
+          summary: "a very useful summary",
+        },
+        cwd
+      );
 
-        expect((await getPackages(cwd)).packages.map((x) => x.packageJson))
-          .toMatchInlineSnapshot(`
+      await version(
+        cwd,
+        {
+          snapshot: true,
+        },
+        {
+          ...modifiedDefaultConfig,
+          ignore: ["pkg-a"],
+          snapshot: {
+            useCalculatedVersion: true,
+            prereleaseTemplate: null,
+          },
+        }
+      );
+
+      expect((await getPackages(cwd)).packages.map((x) => x.packageJson))
+        .toMatchInlineSnapshot(`
           [
             {
               "dependencies": {
@@ -1954,8 +1917,7 @@ describe("snapshot release", () => {
             },
           ]
         `);
-      })
-    );
+    });
   });
 });
 
@@ -1978,7 +1940,6 @@ describe("updateInternalDependents: always", () => {
         version: "1.0.0",
       }),
     });
-    const spy = jest.spyOn(fs, "writeFile");
     await writeChangeset(
       {
         summary: "This is not a summary",
@@ -1994,7 +1955,7 @@ describe("updateInternalDependents: always", () => {
       },
     });
 
-    expect(getPkgJSON("pkg-a", spy.mock.calls)).toEqual(
+    expect(await getPkgJSON("pkg-a", cwd)).toEqual(
       expect.objectContaining({
         name: "pkg-a",
         version: "1.0.1",
@@ -2003,13 +1964,13 @@ describe("updateInternalDependents: always", () => {
         },
       })
     );
-    expect(getPkgJSON("pkg-b", spy.mock.calls)).toEqual(
+    expect(await getPkgJSON("pkg-b", cwd)).toEqual(
       expect.objectContaining({
         name: "pkg-b",
         version: "1.0.1",
       })
     );
-    expect(getChangelog("pkg-a", spy.mock.calls)).toMatchInlineSnapshot(`
+    expect(await getChangelog("pkg-a", cwd)).toMatchInlineSnapshot(`
       "# pkg-a
 
       ## 1.0.1
@@ -2020,7 +1981,7 @@ describe("updateInternalDependents: always", () => {
         - pkg-b@1.0.1
       "
     `);
-    expect(getChangelog("pkg-b", spy.mock.calls)).toMatchInlineSnapshot(`
+    expect(await getChangelog("pkg-b", cwd)).toMatchInlineSnapshot(`
       "# pkg-b
 
       ## 1.0.1
@@ -2054,7 +2015,6 @@ describe("updateInternalDependents: always", () => {
       }),
     });
 
-    const spy = jest.spyOn(fs, "writeFile");
     await writeChangeset(
       {
         summary: "This is a summary",
@@ -2070,13 +2030,13 @@ describe("updateInternalDependents: always", () => {
       },
     });
 
-    expect(getPkgJSON("pkg-a", spy.mock.calls)).toEqual(
+    expect(await getPkgJSON("pkg-a", cwd)).toEqual(
       expect.objectContaining({
         name: "pkg-a",
         version: "1.1.0",
       })
     );
-    expect(getPkgJSON("pkg-b", spy.mock.calls)).toEqual(
+    expect(await getPkgJSON("pkg-b", cwd)).toEqual(
       expect.objectContaining({
         name: "pkg-b",
         version: "1.0.0",
@@ -2086,9 +2046,15 @@ describe("updateInternalDependents: always", () => {
       })
     );
     // `pkg-c` should not be touched
-    expect(() => getPkgJSON("pkg-c", spy.mock.calls)).toThrowError();
+    expect(await getPkgJSON("pkg-c", cwd)).toEqual(
+      expect.objectContaining({
+        name: "pkg-c",
+        version: "1.0.0",
+        dependencies: { "pkg-b": "1.0.0" },
+      })
+    );
 
-    expect(getChangelog("pkg-a", spy.mock.calls)).toMatchInlineSnapshot(`
+    expect(await getChangelog("pkg-a", cwd)).toMatchInlineSnapshot(`
       "# pkg-a
 
       ## 1.1.0
@@ -2101,8 +2067,12 @@ describe("updateInternalDependents: always", () => {
 
     // pkg-b and - pkg-c are not being released so changelogs should not be
     // generated for them
-    expect(() => getChangelog("pkg-b", spy.mock.calls)).toThrowError();
-    expect(() => getChangelog("pkg-c", spy.mock.calls)).toThrowError();
+    await expect(
+      fs.access(await getFilePath("pkg-b", "CHANGELOG.md", cwd))
+    ).rejects.toThrow();
+    await expect(
+      fs.access(await getFilePath("pkg-c", "CHANGELOG.md", cwd))
+    ).rejects.toThrow();
   });
 
   it("should not bump dependant when it depends on an npm tag of a bumped dependency", async () => {
@@ -2122,8 +2092,6 @@ describe("updateInternalDependents: always", () => {
       }),
     });
 
-    const spy = jest.spyOn(fs, "writeFile");
-
     await writeChangeset(
       {
         summary: "This is some fix",
@@ -2139,9 +2107,15 @@ describe("updateInternalDependents: always", () => {
       },
     });
 
-    expect(() => getPkgJSON("pkg-a", spy.mock.calls)).toThrow();
+    // `pkg-a` should not be touched
+    expect(await getPkgJSON("pkg-a", cwd)).toEqual(
+      expect.objectContaining({
+        name: "pkg-a",
+        version: "1.0.0",
+      })
+    );
 
-    expect(getPkgJSON("pkg-b", spy.mock.calls)).toEqual(
+    expect(await getPkgJSON("pkg-b", cwd)).toEqual(
       expect.objectContaining({
         name: "pkg-b",
         version: "1.0.1",
@@ -2149,9 +2123,12 @@ describe("updateInternalDependents: always", () => {
       })
     );
 
-    expect(() => getChangelog("pkg-a", spy.mock.calls)).toThrow();
+    // shouldn't be created
+    await expect(
+      fs.access(await getFilePath("pkg-a", "CHANGELOG.md", cwd))
+    ).rejects.toThrow();
 
-    expect(getChangelog("pkg-b", spy.mock.calls)).toMatchInlineSnapshot(`
+    expect(await getChangelog("pkg-b", cwd)).toMatchInlineSnapshot(`
       "# pkg-b
 
       ## 1.0.1
@@ -2180,7 +2157,6 @@ describe("updateInternalDependents: always", () => {
       }),
     });
 
-    const spy = jest.spyOn(fs, "writeFile");
     await writeChangeset(
       {
         summary: "This is a summary",
@@ -2203,13 +2179,13 @@ describe("updateInternalDependents: always", () => {
       },
     });
 
-    expect(getPkgJSON("pkg-a", spy.mock.calls)).toEqual(
+    expect(await getPkgJSON("pkg-a", cwd)).toEqual(
       expect.objectContaining({
         name: "pkg-a",
         version: "1.1.0",
       })
     );
-    expect(getPkgJSON("pkg-b", spy.mock.calls)).toEqual(
+    expect(await getPkgJSON("pkg-b", cwd)).toEqual(
       expect.objectContaining({
         name: "pkg-b",
         version: "1.0.1",
@@ -2217,7 +2193,7 @@ describe("updateInternalDependents: always", () => {
       })
     );
 
-    expect(getChangelog("pkg-a", spy.mock.calls)).toMatchInlineSnapshot(`
+    expect(await getChangelog("pkg-a", cwd)).toMatchInlineSnapshot(`
       "# pkg-a
 
       ## 1.1.0
@@ -2228,7 +2204,7 @@ describe("updateInternalDependents: always", () => {
       "
     `);
 
-    expect(getChangelog("pkg-b", spy.mock.calls)).toMatchInlineSnapshot(`
+    expect(await getChangelog("pkg-b", cwd)).toMatchInlineSnapshot(`
       "# pkg-b
 
       ## 1.0.1
@@ -2479,11 +2455,18 @@ describe("pre", () => {
         version: "1.0.1-next.0",
       },
     ]);
-    await fs.mkdir(path.join(cwd, "packages", "pkg-c"));
-    await fs.writeJson(path.join(cwd, "packages", "pkg-c", "package.json"), {
-      name: "pkg-c",
-      version: "0.0.0",
-    });
+    await fs.mkdir(path.join(cwd, "packages", "pkg-c"), { recursive: true });
+    await fs.writeFile(
+      path.join(cwd, "packages", "pkg-c", "package.json"),
+      JSON.stringify(
+        {
+          name: "pkg-c",
+          version: "0.0.0",
+        },
+        null,
+        2
+      ) + "\n"
+    );
     await writeChangeset(
       {
         releases: [
@@ -3494,8 +3477,6 @@ describe("pre", () => {
 });
 
 describe("with privatePackages", () => {
-  silenceLogsInBlock();
-
   it("should skip private packages", async () => {
     const cwd = await testdir({
       "package.json": JSON.stringify({

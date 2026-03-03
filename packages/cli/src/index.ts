@@ -2,17 +2,21 @@ import mri from "mri";
 import { ExitError, InternalError } from "@changesets/errors";
 import { error } from "@changesets/logger";
 import { format } from "util";
-import { run } from "./run";
+import { run } from "./run.ts";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
 
 const args = process.argv.slice(2);
 
 const parsed = mri(args, {
-  boolean: ["sinceMaster", "verbose", "empty", "open", "gitTag", "snapshot"],
+  boolean: ["verbose", "empty", "open", "gitTag", "snapshot"],
   string: [
     "output",
     "otp",
     "since",
     "ignore",
+    "message",
     "tag",
     "snapshot",
     "snapshotPrereleaseTemplate",
@@ -21,14 +25,10 @@ const parsed = mri(args, {
     // Short flags
     v: "verbose",
     o: "output",
+    m: "message",
     // Support kebab-case flags
-    "since-master": "sinceMaster",
     "git-tag": "gitTag",
     "snapshot-prerelease-template": "snapshotPrereleaseTemplate",
-    // Deprecated flags
-    "update-changelog": "updateChangelog",
-    "is-public": "isPublic",
-    "skip-c-i": "skipCI",
   },
   default: {
     gitTag: true,
@@ -52,7 +52,7 @@ if (parsed.help && args.length === 1) {
     $ changeset [command]
   Commands
     init
-    add [--empty] [--open]
+    add [--empty] [--open] [--since <branch>] [--message <text>]
     version [--ignore] [--snapshot <?name>] [--snapshot-prerelease-template <template>]
     publish [--tag <name>] [--otp <code>] [--no-git-tag]
     status [--since <branch>] [--verbose] [--output JSON_FILE.json]

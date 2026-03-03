@@ -1,6 +1,6 @@
-import semverInc from "semver/functions/inc";
-import { InternalRelease, PreInfo } from "./types";
-import { mapGetOrThrowInternal } from "./utils";
+import semverInc from "semver/functions/inc.js";
+import type { InternalRelease, PreInfo } from "./types.ts";
+import { mapGetOrThrowInternal } from "./utils.ts";
 
 export function incrementVersion(
   release: InternalRelease,

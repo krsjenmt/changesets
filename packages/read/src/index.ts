@@ -1,9 +1,8 @@
-import fs from "fs-extra";
+import fs from "node:fs/promises";
 import path from "path";
 import parse from "@changesets/parse";
-import { NewChangeset } from "@changesets/types";
+import type { NewChangeset } from "@changesets/types";
 import * as git from "@changesets/git";
-import getOldChangesetsAndWarn from "./legacy";
 
 async function filterChangesetsSinceRef(
   changesets: Array<string>,
@@ -20,10 +19,10 @@ async function filterChangesetsSinceRef(
 }
 
 export default async function getChangesets(
-  cwd: string,
+  rootDir: string,
   sinceRef?: string
 ): Promise<Array<NewChangeset>> {
-  let changesetBase = path.join(cwd, ".changeset");
+  let changesetBase = path.join(rootDir, ".changeset");
   let contents: string[];
   try {
     contents = await fs.readdir(changesetBase);
@@ -42,8 +41,6 @@ export default async function getChangesets(
     );
   }
 
-  let oldChangesetsPromise = getOldChangesetsAndWarn(changesetBase, contents);
-
   let changesets = contents.filter(
     (file) =>
       !file.startsWith(".") &&
@@ -52,15 +49,9 @@ export default async function getChangesets(
   );
 
   const changesetContents = changesets.map(async (file) => {
-    const changeset = await fs.readFile(
-      path.join(changesetBase, file),
-      "utf-8"
-    );
+    const changeset = await fs.readFile(path.join(changesetBase, file), "utf8");
 
     return { ...parse(changeset), id: file.replace(".md", "") };
   });
-  return [
-    ...(await oldChangesetsPromise),
-    ...(await Promise.all(changesetContents)),
-  ];
+  return await Promise.all(changesetContents);
 }

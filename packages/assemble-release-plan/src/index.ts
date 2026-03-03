@@ -1,22 +1,22 @@
 import { InternalError } from "@changesets/errors";
 import { getDependentsGraph } from "@changesets/get-dependents-graph";
 import { shouldSkipPackage } from "@changesets/should-skip-package";
-import {
+import type {
   Config,
   NewChangeset,
   PackageGroup,
   PreState,
   ReleasePlan,
 } from "@changesets/types";
-import { Package, Packages } from "@manypkg/get-packages";
-import semverParse from "semver/functions/parse";
-import applyLinks from "./apply-links";
-import determineDependents from "./determine-dependents";
-import flattenReleases from "./flatten-releases";
-import { incrementVersion } from "./increment";
-import matchFixedConstraint from "./match-fixed-constraint";
-import { InternalRelease, PreInfo } from "./types";
-import { mapGetOrThrow, mapGetOrThrowInternal } from "./utils";
+import type { Package, Packages } from "@manypkg/get-packages";
+import semverParse from "semver/functions/parse.js";
+import applyLinks from "./apply-links.ts";
+import determineDependents from "./determine-dependents.ts";
+import flattenReleases from "./flatten-releases.ts";
+import { incrementVersion } from "./increment.ts";
+import matchFixedConstraint from "./match-fixed-constraint.ts";
+import type { InternalRelease, PreInfo } from "./types.ts";
+import { mapGetOrThrow, mapGetOrThrowInternal } from "./utils.ts";
 
 type SnapshotReleaseParameters = {
   tag?: string | undefined;
@@ -179,6 +179,10 @@ function assembleReleasePlan(
     refinedConfig
   );
 
+  // Unlike the config/CLI validation graphs, this graph intentionally includes
+  // devDependencies. While devDeps don't cause version bumps (determineDependents
+  // assigns type "none"), they must appear in the release plan so that
+  // apply-release-plan can update their version ranges in package.json.
   let dependencyGraph = getDependentsGraph(packages, {
     bumpVersionsWithWorkspaceProtocolOnly:
       refinedConfig.bumpVersionsWithWorkspaceProtocolOnly,

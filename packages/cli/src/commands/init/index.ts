@@ -1,26 +1,24 @@
-import path from "path";
-import fs from "fs-extra";
+import { existsSync } from "node:fs";
+import fs from "node:fs/promises";
+import path from "node:path";
 import pc from "picocolors";
 
 import { defaultWrittenConfig } from "@changesets/config";
 import { info, log, warn, error } from "@changesets/logger";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
 
 const pkgPath = path.dirname(require.resolve("@changesets/cli/package.json"));
 
-// Modify base branch to "main" without changing defaultWrittenConfig since it also serves as a fallback
-// for config files that don't specify a base branch. Changing that to main would be a breaking change.
-const defaultConfig = `${JSON.stringify(
-  { ...defaultWrittenConfig, baseBranch: "main" },
-  null,
-  2
-)}\n`;
+const defaultConfig = `${JSON.stringify(defaultWrittenConfig, null, 2)}\n`;
 
 export default async function init(cwd: string) {
   const changesetBase = path.resolve(cwd, ".changeset");
 
-  if (fs.existsSync(changesetBase)) {
-    if (!fs.existsSync(path.join(changesetBase, "config.json"))) {
-      if (fs.existsSync(path.join(changesetBase, "config.js"))) {
+  if (existsSync(changesetBase)) {
+    if (!existsSync(path.join(changesetBase, "config.json"))) {
+      if (existsSync(path.join(changesetBase, "config.js"))) {
         error(
           "It looks like you're using the version 1 `.changeset/config.js` file"
         );
@@ -49,7 +47,9 @@ export default async function init(cwd: string) {
       );
     }
   } else {
-    await fs.copy(path.resolve(pkgPath, "./default-files"), changesetBase);
+    await fs.cp(path.resolve(pkgPath, "./default-files"), changesetBase, {
+      recursive: true,
+    });
     await fs.writeFile(
       path.resolve(changesetBase, "config.json"),
       defaultConfig

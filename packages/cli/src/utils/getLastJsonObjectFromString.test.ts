@@ -1,4 +1,5 @@
-import { getLastJsonObjectFromString } from "./getLastJsonObjectFromString";
+import { describe, expect, it } from "vitest";
+import { getLastJsonObjectFromString } from "./getLastJsonObjectFromString.ts";
 
 describe("getLastJsonObjectFromString", () => {
   it("should handle stringified object", () => {

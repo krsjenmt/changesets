@@ -1,9 +1,10 @@
-// @ts-ignore it's not worth writing a TS declaration file in this repo for a tiny module we use once like this
-import termSize from "term-size";
 import { error, prefix, success } from "@changesets/logger";
-import { prompt } from "enquirer";
+import enuirer from "enquirer";
 import { edit } from "@inquirer/external-editor";
-import { symbols } from "ansi-colors";
+import ansiColors from "ansi-colors";
+
+const { prompt } = enuirer;
+const { symbols } = ansiColors;
 
 // those types are not exported from `enquirer` so we extract them here
 // so we can make type assertions using them because `enquirer` types do no support `prefix` right now
@@ -38,7 +39,7 @@ const serialId: () => number = (function () {
   return () => id++;
 })();
 
-const limit = Math.max(termSize().rows - 5, 10);
+const limit = Math.max(process.stdout.rows - 5, 10);
 
 let cancelFlow = () => {
   success("Cancelled... 👋 ");

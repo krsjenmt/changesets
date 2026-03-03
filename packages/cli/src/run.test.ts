@@ -1,13 +1,66 @@
-import { error } from "@changesets/logger";
-import { testdir } from "@changesets/test-utils";
-
-import { run } from "./run";
+import path from "path";
+import { describe, expect, it, vi } from "vitest";
+import {
+  mockedLogger,
+  silenceLogsInBlock,
+  testdir,
+} from "@changesets/test-utils";
+import add from "./commands/add/index.ts";
+import { run } from "./run.ts";
 import writeChangeset from "@changesets/write";
 
-jest.mock("@changesets/logger");
-jest.mock("./commands/version");
+vi.mock("./commands/add");
+vi.mock("./commands/version");
+
+silenceLogsInBlock();
 
 describe("cli", () => {
+  describe("add", () => {
+    it("should pass --message to add when using default command", async () => {
+      const cwd = await testdir({
+        "package.json": JSON.stringify({
+          name: "single-package",
+          version: "1.0.0",
+        }),
+        ".changeset/config.json": JSON.stringify({}),
+      });
+
+      await run([], { message: "summary from message" }, cwd);
+
+      expect(add).toHaveBeenCalledWith(
+        cwd,
+        {
+          empty: undefined,
+          open: undefined,
+          message: "summary from message",
+        },
+        expect.any(Object)
+      );
+    });
+
+    it("should pass --message to add command", async () => {
+      const cwd = await testdir({
+        "package.json": JSON.stringify({
+          name: "single-package",
+          version: "1.0.0",
+        }),
+        ".changeset/config.json": JSON.stringify({}),
+      });
+
+      await run(["add"], { message: "summary from message" }, cwd);
+
+      expect(add).toHaveBeenCalledWith(
+        cwd,
+        {
+          empty: undefined,
+          open: undefined,
+          message: "summary from message",
+        },
+        expect.any(Object)
+      );
+    });
+  });
+
   describe("version", () => {
     it("should validate package name passed in from --ignore flag", async () => {
       const cwd = await testdir({
@@ -27,7 +80,7 @@ describe("cli", () => {
         // ignore errors. We just want to validate the error message
       }
 
-      const loggerErrorCalls = (error as any).mock.calls;
+      const loggerErrorCalls = mockedLogger.error!.mock.calls;
       expect(loggerErrorCalls.length).toEqual(1);
       expect(loggerErrorCalls[0][0]).toEqual(
         `The package "pkg-c" is passed to the \`--ignore\` option but it is not found in the project. You may have misspelled the package name.`
@@ -59,7 +112,7 @@ describe("cli", () => {
         // ignore the error. We just want to validate the error message
       }
 
-      const loggerErrorCalls = (error as any).mock.calls;
+      const loggerErrorCalls = mockedLogger.error!.mock.calls;
       expect(loggerErrorCalls.length).toEqual(1);
       expect(loggerErrorCalls[0][0]).toMatchInlineSnapshot(
         `"The package "pkg-a" depends on the skipped package "pkg-b" (either by \`ignore\` option or by \`privatePackages.version\`), but "pkg-a" is not being skipped. Please pass "pkg-a" to the \`--ignore\` flag."`
@@ -97,7 +150,7 @@ describe("cli", () => {
         // ignore the error. We just want to validate the error message
       }
 
-      const loggerErrorCalls = (error as any).mock.calls;
+      const loggerErrorCalls = mockedLogger.error!.mock.calls;
       expect(loggerErrorCalls.length).toEqual(0);
     });
 
@@ -132,7 +185,61 @@ describe("cli", () => {
         // ignore the error. We just want to validate the error message
       }
 
-      const loggerErrorCalls = (error as any).mock.calls;
+      const loggerErrorCalls = mockedLogger.error!.mock.calls;
+      expect(loggerErrorCalls.length).toEqual(0);
+    });
+
+    it("should not throw if a versioned private package depends on an ignored package", async () => {
+      const cwd = await testdir({
+        "package.json": JSON.stringify({
+          private: true,
+          workspaces: ["packages/*"],
+        }),
+        "packages/pkg-a/package.json": JSON.stringify({
+          name: "pkg-a",
+          version: "1.0.0",
+          private: true,
+          dependencies: {
+            "pkg-b": "1.0.0",
+          },
+        }),
+        "packages/pkg-b/package.json": JSON.stringify({
+          name: "pkg-b",
+          version: "1.0.0",
+          private: true,
+        }),
+        ".changeset/config.json": JSON.stringify({}),
+      });
+
+      await run(["version"], { ignore: ["pkg-b"] }, cwd);
+
+      const loggerErrorCalls = mockedLogger.error!.mock.calls;
+      expect(loggerErrorCalls.length).toEqual(0);
+    });
+
+    it("should not throw if a package only has a devDependency on an ignored package", async () => {
+      const cwd = await testdir({
+        "package.json": JSON.stringify({
+          private: true,
+          workspaces: ["packages/*"],
+        }),
+        "packages/pkg-a/package.json": JSON.stringify({
+          name: "pkg-a",
+          version: "1.0.0",
+          devDependencies: {
+            "pkg-b": "1.0.0",
+          },
+        }),
+        "packages/pkg-b/package.json": JSON.stringify({
+          name: "pkg-b",
+          version: "1.0.0",
+        }),
+        ".changeset/config.json": JSON.stringify({}),
+      });
+
+      await run(["version"], { ignore: ["pkg-b"] }, cwd);
+
+      const loggerErrorCalls = mockedLogger.error!.mock.calls;
       expect(loggerErrorCalls.length).toEqual(0);
     });
 
@@ -163,7 +270,7 @@ describe("cli", () => {
         // ignore errors. We just want to validate the error message
       }
 
-      const loggerErrorCalls = (error as any).mock.calls;
+      const loggerErrorCalls = mockedLogger.error!.mock.calls;
       expect(loggerErrorCalls.length).toEqual(1);
       expect(loggerErrorCalls[0][0]).toEqual(
         `It looks like you are trying to use the \`--ignore\` option while ignore is defined in the config file. This is currently not allowed, you can only use one of them at a time.`
@@ -219,8 +326,8 @@ describe("cli", () => {
 
       await expect(run(["version"], {}, cwd)).rejects
         .toThrowErrorMatchingInlineSnapshot(`
-        "Some errors occurred when validating the changesets config:
-        The \`prettier\` option is set as "no thanks" when the only valid values are undefined or a boolean"
+        [Error: Some errors occurred when validating the changesets config:
+        The \`prettier\` option is set as "no thanks" when the only valid values are undefined or a boolean]
       `);
     });
   });
@@ -244,11 +351,65 @@ describe("cli", () => {
         // ignore the error. We just want to validate the error message
       }
 
-      const loggerErrorCalls = (error as any).mock.calls;
+      const loggerErrorCalls = mockedLogger.error!.mock.calls;
       expect(loggerErrorCalls.length).toEqual(1);
       expect(loggerErrorCalls[0][0]).toEqual(
         `A tag must be passed when using prerelease enter`
       );
     });
+  });
+
+  it("should be able to add a changesed when called from subdirectory", async () => {
+    const rootDir = await testdir({
+      "package.json": JSON.stringify({
+        private: true,
+        workspaces: ["packages/*"],
+      }),
+      "packages/pkg-a/package.json": JSON.stringify({
+        name: "pkg-a",
+        version: "1.0.0",
+      }),
+      ".changeset/config.json": JSON.stringify({}),
+    });
+
+    const cwd = path.resolve(rootDir, "packages", "pkg-a");
+
+    await run([], { message: "test" }, cwd);
+
+    expect(add).toHaveBeenCalledWith(
+      rootDir,
+      {
+        empty: undefined,
+        open: undefined,
+        message: "test",
+      },
+      expect.any(Object)
+    );
+  });
+
+  it("should throw when .changeset folder is missing when called from subdirectory", async () => {
+    const rootDir = await testdir({
+      "package.json": JSON.stringify({
+        private: true,
+        workspaces: ["packages/*"],
+      }),
+      "packages/pkg-a/package.json": JSON.stringify({
+        name: "pkg-a",
+        version: "1.0.0",
+      }),
+    });
+
+    const cwd = path.resolve(rootDir, "packages", "pkg-a");
+
+    try {
+      await run(["version"], {}, cwd);
+    } catch (e) {
+      // ignore the error. We just want to validate the error message
+    }
+
+    const loggerErrorCalls = mockedLogger.error!.mock.calls;
+    expect(loggerErrorCalls[0][0].trim()).toEqual(
+      "There is no .changeset folder."
+    );
   });
 });
